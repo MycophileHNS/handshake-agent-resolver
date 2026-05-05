@@ -8,10 +8,14 @@ class MockSkillFetcher {
     this.requests = [];
   }
 
-  async fetch(url) {
-    this.requests.push(url);
+  async fetch(url, options = {}) {
+    this.requests.push({
+      url,
+      address: options.address ?? null,
+      name: options.name ?? null
+    });
     const parsed = new URL(url);
-    const response = this.responses[parsed.pathname] ?? this.responses[url];
+    const response = this.responses[url] ?? this.responses[parsed.pathname];
 
     if (response instanceof Error)
       throw response;
@@ -124,6 +128,91 @@ test('checks /.well-known/agent/SKILL.md after standard paths miss', async () =>
     '/SKILL.md',
     '/skill.md',
     '/.well-known/agent/SKILL.md'
+  ]);
+});
+
+test('external metadata.endpoint candidates resolve externally without Handshake address pinning', async () => {
+  const fetcher = new MockSkillFetcher({
+    'https://skills.example.com/SKILL.md': {
+      status: 200,
+      body: '# External Endpoint Skill'
+    }
+  });
+
+  const skill = await discoverSkillMd({
+    name: 'example',
+    metadata: {
+      endpoint: 'https://skills.example.com/api'
+    },
+    addresses: ['192.0.2.10'],
+    fetcher
+  });
+
+  assert.equal(skill.found, true);
+  assert.equal(skill.url, 'https://skills.example.com/SKILL.md');
+  assert.equal(fetcher.requests[0].url, 'https://skills.example.com/SKILL.md');
+  assert.equal(fetcher.requests[0].address, null);
+});
+
+test('absolute external metadata.skill resolves externally without Handshake address pinning', async () => {
+  const fetcher = new MockSkillFetcher({
+    'https://cdn.example.net/agents/example/SKILL.md': {
+      status: 200,
+      body: '# Absolute External Skill'
+    }
+  });
+
+  const skill = await discoverSkillMd({
+    name: 'example',
+    metadata: {
+      skill: 'https://cdn.example.net/agents/example/SKILL.md'
+    },
+    addresses: ['192.0.2.10'],
+    fetcher
+  });
+
+  assert.equal(skill.found, true);
+  assert.equal(skill.url, 'https://cdn.example.net/agents/example/SKILL.md');
+  assert.equal(fetcher.requests[0].url, 'https://cdn.example.net/agents/example/SKILL.md');
+  assert.equal(fetcher.requests[0].address, null);
+});
+
+test('Handshake-name-local SKILL.md candidates still use the resolved Handshake address', async () => {
+  const fetcher = new MockSkillFetcher({
+    'https://example/SKILL.md': {
+      status: 200,
+      body: '# Local Skill'
+    }
+  });
+
+  const skill = await discoverSkillMd({
+    name: 'example',
+    metadata: {},
+    addresses: ['192.0.2.10'],
+    fetcher
+  });
+
+  assert.equal(skill.found, true);
+  assert.equal(skill.url, 'https://example/SKILL.md');
+  assert.equal(fetcher.requests[0].url, 'https://example/SKILL.md');
+  assert.equal(fetcher.requests[0].address, '192.0.2.10');
+});
+
+test('canonical SKILL.md discovery order is unchanged', () => {
+  const candidates = buildSkillCandidates({
+    name: 'example',
+    metadata: {}
+  });
+
+  assert.deepEqual(candidates.map((candidate) => candidate.path), [
+    '/SKILL.md',
+    '/skill.md',
+    '/.well-known/agent/SKILL.md'
+  ]);
+  assert.deepEqual(candidates.map((candidate) => candidate.url), [
+    'https://example/SKILL.md',
+    'https://example/skill.md',
+    'https://example/.well-known/agent/SKILL.md'
   ]);
 });
 
