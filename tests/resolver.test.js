@@ -244,3 +244,33 @@ test('does not depend on a centralized registry source', async () => {
   assert.equal(result.status, 'found');
   assert.equal(result.warnings.some((warning) => /registry|root server/i.test(warning)), false);
 });
+
+test('SKILL.md discovery uses only record-provided locations and canonical fallbacks', async () => {
+  const skillFetcher = new MockSkillFetcher({
+    '/SKILL.md': {
+      status: 200,
+      body: '# Local Skill'
+    }
+  });
+  const {source, resolver} = resolverFor({
+    localname: {
+      A: ['192.0.2.30'],
+      TXT: metadata({endpoint: 'https://skills.example.test/agent.json'})
+    }
+  }, {
+    skill: {
+      fetcher: skillFetcher
+    }
+  });
+
+  const result = await resolver.resolve('localname');
+
+  assert.equal(result.status, 'found');
+  assert.deepEqual(source.nameRequests, ['localname']);
+  assert.deepEqual(source.requests, []);
+  assert.deepEqual(skillFetcher.requests, ['https://skills.example.test/SKILL.md']);
+  assert.equal(
+    result.warnings.some((warning) => /registry|directory|root server|service list/i.test(warning)),
+    false
+  );
+});

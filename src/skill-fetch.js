@@ -5,7 +5,7 @@ import {
   DEFAULT_SKILL_FETCH_TIMEOUT_MS,
   MAX_SKILL_BYTES
 } from './constants.js';
-import {buildSkillCandidates} from './skill-paths.js';
+import {buildSkillCandidatePlan} from './skill-paths.js';
 import {parseSkillMd} from './skill-parse.js';
 
 function sha256(content) {
@@ -148,7 +148,7 @@ export async function discoverSkillMd({
   requestSkill: requestSkillImpl = requestSkill,
   defaultScheme = 'https'
 } = {}) {
-  const candidates = buildSkillCandidates({
+  const {candidates, warnings} = buildSkillCandidatePlan({
     name,
     metadata,
     defaultScheme
@@ -184,7 +184,10 @@ export async function discoverSkillMd({
         attempts,
         hash: attempt.hash,
         metadata: parsed.metadata,
-        warnings: parsed.warnings
+        warnings: [
+          ...warnings,
+          ...parsed.warnings
+        ]
       };
     }
   }
@@ -195,6 +198,6 @@ export async function discoverSkillMd({
     canonicalPath: candidates[0]?.path ?? null,
     url: null,
     attempts,
-    warnings: []
+    warnings
   };
 }

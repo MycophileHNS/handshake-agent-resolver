@@ -48,6 +48,18 @@ class MockRequestSkill {
   }
 }
 
+const fallbackSkillPaths = [
+  '/SKILL.md',
+  '/skill.md',
+  '/.well-known/agent/SKILL.md'
+];
+
+const fallbackSkillUrls = [
+  'https://example/SKILL.md',
+  'https://example/skill.md',
+  'https://example/.well-known/agent/SKILL.md'
+];
+
 test('checks metadata-declared SKILL.md path first', () => {
   const candidates = buildSkillCandidates({
     name: 'example',
@@ -60,6 +72,138 @@ test('checks metadata-declared SKILL.md path first', () => {
   assert.equal(candidates[0].path, '/custom/SKILL.md');
   assert.equal(candidates[1].path, '/SKILL.md');
 });
+
+for (const endpoint of [
+  'ipfs://bafyexample/agent.json',
+  'mailto:agent@example.test',
+  'cid://bafyexample'
+]) {
+  test(`ignores unsupported metadata.endpoint scheme for ${endpoint}`, () => {
+    const candidates = buildSkillCandidates({
+      name: 'example',
+      metadata: {
+        endpoint
+      }
+    });
+
+    assert.deepEqual(candidates.map((candidate) => candidate.url), fallbackSkillUrls);
+  });
+}
+
+test('unsupported metadata.endpoint warning does not block fallback discovery', async () => {
+  const fetcher = new MockSkillFetcher({
+    '/SKILL.md': {
+      status: 200,
+      body: '# Fallback Skill'
+    }
+  });
+
+  const skill = await discoverSkillMd({
+    name: 'example',
+    metadata: {
+      endpoint: 'ipfs://bafyexample/agent.json'
+    },
+    addresses: ['192.0.2.10'],
+    fetcher
+  });
+
+  assert.equal(skill.found, true);
+  assert.equal(skill.url, 'https://example/SKILL.md');
+  assert.match(skill.warnings[0], /unsupported endpoint scheme/i);
+});
+
+test('malformed absolute metadata.skill does not throw and falls back to canonical paths', () => {
+  assert.doesNotThrow(() => buildSkillCandidates({
+    name: 'example',
+    metadata: {
+      skill: 'https://'
+    }
+  }));
+
+  const candidates = buildSkillCandidates({
+    name: 'example',
+    metadata: {
+      skill: 'https://'
+    }
+  });
+
+  assert.deepEqual(candidates.map((candidate) => candidate.path), fallbackSkillPaths);
+  assert.deepEqual(candidates.map((candidate) => candidate.url), fallbackSkillUrls);
+});
+
+test('malformed absolute metadata.skill records a warning and continues fallback attempts', async () => {
+  const fetcher = new MockSkillFetcher();
+  const skill = await discoverSkillMd({
+    name: 'example',
+    metadata: {
+      skill: 'https://'
+    },
+    addresses: ['192.0.2.10'],
+    fetcher
+  });
+
+  assert.equal(skill.found, false);
+  assert.match(skill.warnings[0], /malformed absolute SKILL\.md URL/i);
+  assert.deepEqual(skill.attempts.map((attempt) => attempt.path), fallbackSkillPaths);
+});
+
+for (const skillUrl of [
+  'ipfs://bafyexample/SKILL.md',
+  'cid://bafyexample/SKILL.md',
+  'mailto:agent@example.test',
+  'file:///tmp/SKILL.md'
+]) {
+  test(`ignores unsupported absolute metadata.skill scheme for ${skillUrl}`, () => {
+    const candidates = buildSkillCandidates({
+      name: 'example',
+      metadata: {
+        skill: skillUrl
+      }
+    });
+
+    assert.deepEqual(candidates.map((candidate) => candidate.path), fallbackSkillPaths);
+    assert.deepEqual(candidates.map((candidate) => candidate.url), fallbackSkillUrls);
+  });
+}
+
+for (const endpoint of [
+  'http://skills.example.com/api',
+  'https://skills.example.com/api'
+]) {
+  test(`uses valid metadata.endpoint origin for ${endpoint}`, () => {
+    const origin = new URL(endpoint).origin;
+    const candidates = buildSkillCandidates({
+      name: 'example',
+      metadata: {
+        endpoint
+      }
+    });
+
+    assert.deepEqual(candidates.map((candidate) => candidate.url), [
+      `${origin}/SKILL.md`,
+      `${origin}/skill.md`,
+      `${origin}/.well-known/agent/SKILL.md`
+    ]);
+  });
+}
+
+for (const skillUrl of [
+  'http://cdn.example.net/agents/example/SKILL.md',
+  'https://cdn.example.net/agents/example/SKILL.md'
+]) {
+  test(`uses valid absolute metadata.skill URL for ${skillUrl}`, () => {
+    const candidates = buildSkillCandidates({
+      name: 'example',
+      metadata: {
+        skill: skillUrl
+      }
+    });
+
+    assert.equal(candidates[0].url, skillUrl);
+    assert.equal(candidates[0].path, '/agents/example/SKILL.md');
+    assert.deepEqual(candidates.slice(1).map((candidate) => candidate.path), fallbackSkillPaths);
+  });
+}
 
 test('checks /SKILL.md and records a found result', async () => {
   const fetcher = new MockSkillFetcher({
@@ -269,14 +413,10 @@ test('canonical SKILL.md discovery order is unchanged', () => {
   });
 
   assert.deepEqual(candidates.map((candidate) => candidate.path), [
-    '/SKILL.md',
-    '/skill.md',
-    '/.well-known/agent/SKILL.md'
+    ...fallbackSkillPaths
   ]);
   assert.deepEqual(candidates.map((candidate) => candidate.url), [
-    'https://example/SKILL.md',
-    'https://example/skill.md',
-    'https://example/.well-known/agent/SKILL.md'
+    ...fallbackSkillUrls
   ]);
 });
 
