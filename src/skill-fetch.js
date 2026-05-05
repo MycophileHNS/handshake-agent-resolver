@@ -95,9 +95,7 @@ function requestSkill(urlString, {
 }
 
 async function fetchCandidate(candidate, options) {
-  const url = new URL(candidate.url);
-
-  if (!options.address && !options.fetcher) {
+  if (options.requiresResolvedAddress && !options.address && !options.fetcher) {
     return {
       url: candidate.url,
       path: candidate.path,
@@ -112,7 +110,7 @@ async function fetchCandidate(candidate, options) {
   try {
     response = options.fetcher
       ? await options.fetcher.fetch(candidate.url, options)
-      : await requestSkill(candidate.url, options);
+      : await options.requestSkill(candidate.url, options);
   } catch (error) {
     response = {
       status: 0,
@@ -147,6 +145,7 @@ export async function discoverSkillMd({
   addresses = [],
   timeoutMs = DEFAULT_SKILL_FETCH_TIMEOUT_MS,
   fetcher,
+  requestSkill: requestSkillImpl = requestSkill,
   defaultScheme = 'https'
 } = {}) {
   const candidates = buildSkillCandidates({
@@ -158,14 +157,17 @@ export async function discoverSkillMd({
   const attempts = [];
 
   for (const candidate of candidates) {
-    const candidateAddress = candidateUsesResolvedName(candidate.url, name)
+    const requiresResolvedAddress = candidateUsesResolvedName(candidate.url, name);
+    const candidateAddress = requiresResolvedAddress
       ? address
       : null;
     const attempt = await fetchCandidate(candidate, {
       address: candidateAddress,
+      requiresResolvedAddress,
       name,
       timeoutMs,
-      fetcher
+      fetcher,
+      requestSkill: requestSkillImpl
     });
 
     const {body, ...publicAttempt} = attempt;

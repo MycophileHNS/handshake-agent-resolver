@@ -27,6 +27,27 @@ class MockSkillFetcher {
   }
 }
 
+class MockRequestSkill {
+  constructor(responses = {}) {
+    this.responses = responses;
+    this.requests = [];
+  }
+
+  async request(url, options = {}) {
+    this.requests.push({
+      url,
+      address: options.address ?? null,
+      name: options.name ?? null
+    });
+    const parsed = new URL(url);
+
+    return this.responses[url] ?? this.responses[parsed.pathname] ?? {
+      status: 404,
+      body: ''
+    };
+  }
+}
+
 test('checks metadata-declared SKILL.md path first', () => {
   const candidates = buildSkillCandidates({
     name: 'example',
@@ -132,7 +153,7 @@ test('checks /.well-known/agent/SKILL.md after standard paths miss', async () =>
 });
 
 test('external metadata.endpoint candidates resolve externally without Handshake address pinning', async () => {
-  const fetcher = new MockSkillFetcher({
+  const requestSkill = new MockRequestSkill({
     'https://skills.example.com/SKILL.md': {
       status: 200,
       body: '# External Endpoint Skill'
@@ -145,17 +166,17 @@ test('external metadata.endpoint candidates resolve externally without Handshake
       endpoint: 'https://skills.example.com/api'
     },
     addresses: ['192.0.2.10'],
-    fetcher
+    requestSkill: requestSkill.request.bind(requestSkill)
   });
 
   assert.equal(skill.found, true);
   assert.equal(skill.url, 'https://skills.example.com/SKILL.md');
-  assert.equal(fetcher.requests[0].url, 'https://skills.example.com/SKILL.md');
-  assert.equal(fetcher.requests[0].address, null);
+  assert.equal(requestSkill.requests[0].url, 'https://skills.example.com/SKILL.md');
+  assert.equal(requestSkill.requests[0].address, null);
 });
 
 test('absolute external metadata.skill resolves externally without Handshake address pinning', async () => {
-  const fetcher = new MockSkillFetcher({
+  const requestSkill = new MockRequestSkill({
     'https://cdn.example.net/agents/example/SKILL.md': {
       status: 200,
       body: '# Absolute External Skill'
@@ -168,17 +189,17 @@ test('absolute external metadata.skill resolves externally without Handshake add
       skill: 'https://cdn.example.net/agents/example/SKILL.md'
     },
     addresses: ['192.0.2.10'],
-    fetcher
+    requestSkill: requestSkill.request.bind(requestSkill)
   });
 
   assert.equal(skill.found, true);
   assert.equal(skill.url, 'https://cdn.example.net/agents/example/SKILL.md');
-  assert.equal(fetcher.requests[0].url, 'https://cdn.example.net/agents/example/SKILL.md');
-  assert.equal(fetcher.requests[0].address, null);
+  assert.equal(requestSkill.requests[0].url, 'https://cdn.example.net/agents/example/SKILL.md');
+  assert.equal(requestSkill.requests[0].address, null);
 });
 
 test('Handshake-name-local SKILL.md candidates still use the resolved Handshake address', async () => {
-  const fetcher = new MockSkillFetcher({
+  const requestSkill = new MockRequestSkill({
     'https://example/SKILL.md': {
       status: 200,
       body: '# Local Skill'
@@ -189,13 +210,56 @@ test('Handshake-name-local SKILL.md candidates still use the resolved Handshake 
     name: 'example',
     metadata: {},
     addresses: ['192.0.2.10'],
-    fetcher
+    requestSkill: requestSkill.request.bind(requestSkill)
   });
 
   assert.equal(skill.found, true);
   assert.equal(skill.url, 'https://example/SKILL.md');
-  assert.equal(fetcher.requests[0].url, 'https://example/SKILL.md');
-  assert.equal(fetcher.requests[0].address, '192.0.2.10');
+  assert.equal(requestSkill.requests[0].url, 'https://example/SKILL.md');
+  assert.equal(requestSkill.requests[0].address, '192.0.2.10');
+});
+
+test('Handshake-name-local SKILL.md candidates do not use normal DNS without a resolved address', async () => {
+  const requestSkill = new MockRequestSkill({
+    'https://example/SKILL.md': {
+      status: 200,
+      body: '# Should Not Fetch'
+    }
+  });
+
+  const skill = await discoverSkillMd({
+    name: 'example',
+    metadata: {},
+    requestSkill: requestSkill.request.bind(requestSkill)
+  });
+
+  assert.equal(skill.found, false);
+  assert.equal(requestSkill.requests.length, 0);
+  assert.equal(skill.attempts[0].url, 'https://example/SKILL.md');
+  assert.equal(skill.attempts[0].status, 0);
+  assert.match(skill.attempts[0].error, /resolved address/);
+});
+
+test('no-address external SKILL.md candidates still use production request path', async () => {
+  const requestSkill = new MockRequestSkill({
+    'https://skills.example.com/SKILL.md': {
+      status: 200,
+      body: '# External Without Handshake Address'
+    }
+  });
+
+  const skill = await discoverSkillMd({
+    name: 'example',
+    metadata: {
+      endpoint: 'https://skills.example.com/api'
+    },
+    requestSkill: requestSkill.request.bind(requestSkill)
+  });
+
+  assert.equal(skill.found, true);
+  assert.equal(skill.url, 'https://skills.example.com/SKILL.md');
+  assert.equal(requestSkill.requests[0].url, 'https://skills.example.com/SKILL.md');
+  assert.equal(requestSkill.requests[0].address, null);
 });
 
 test('canonical SKILL.md discovery order is unchanged', () => {
