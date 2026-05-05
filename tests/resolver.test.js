@@ -37,6 +37,83 @@ class MockSkillFetcher {
   }
 }
 
+function emptyRecords() {
+  return {
+    A: [],
+    AAAA: [],
+    TXT: []
+  };
+}
+
+class LookupErrorSource {
+  sourceInfo() {
+    return {
+      type: 'lookup-error-test'
+    };
+  }
+
+  async resolveName() {
+    return {
+      status: 'lookup_error',
+      resolved: false,
+      addresses: [],
+      address: null,
+      recordType: null,
+      records: emptyRecords(),
+      source: this.sourceInfo(),
+      errors: [{
+        recordType: 'TXT',
+        code: 'SERVFAIL',
+        message: 'TXT lookup failed'
+      }]
+    };
+  }
+
+  async resolveTxt() {
+    return {
+      status: 'lookup_error',
+      records: [],
+      code: 'SERVFAIL',
+      message: 'TXT lookup failed'
+    };
+  }
+}
+
+class PartialTxtErrorSource {
+  sourceInfo() {
+    return {
+      type: 'partial-txt-error-test'
+    };
+  }
+
+  async resolveName() {
+    return {
+      status: 'ok',
+      resolved: true,
+      addresses: ['192.0.2.40'],
+      address: '192.0.2.40',
+      recordType: 'A',
+      records: {
+        ...emptyRecords(),
+        A: ['192.0.2.40']
+      },
+      source: this.sourceInfo(),
+      errors: [{
+        recordType: 'TXT',
+        code: 'SERVFAIL',
+        message: 'TXT lookup failed'
+      }]
+    };
+  }
+
+  async resolveTxt() {
+    return {
+      status: 'no_records',
+      records: []
+    };
+  }
+}
+
 function resolverFor(recordsByName, options = {}) {
   const source = new MockHandshakeSource(recordsByName);
   const resolver = new AgentIdentityResolver({
@@ -170,6 +247,48 @@ test('returns not_found when no TXT records exist at any lookup location', async
     '_agent.empty',
     '_agent-identity.empty'
   ]);
+});
+
+test('returns lookup_error when DNS metadata lookup fails before records are read', async () => {
+  const resolver = new AgentIdentityResolver({
+    source: new LookupErrorSource()
+  });
+
+  const result = await resolver.resolve('broken');
+
+  assert.equal(result.status, 'not_found');
+  assert.equal(result.reason, 'lookup_error');
+  assert.equal(result.metadataFound, false);
+  assert.equal(result.skill.status, 'skipped_no_metadata');
+  assert.equal(result.attempts[0].status, 'lookup_error');
+  assert.deepEqual(result.errors, [{
+    recordType: 'TXT',
+    code: 'SERVFAIL',
+    message: 'TXT lookup failed'
+  }]);
+  assert.equal(
+    result.warnings.some((warning) => /DNS lookup warning: SERVFAIL TXT lookup failed/.test(warning)),
+    true
+  );
+});
+
+test('preserves TXT lookup errors when address records resolve', async () => {
+  const resolver = new AgentIdentityResolver({
+    source: new PartialTxtErrorSource()
+  });
+
+  const result = await resolver.resolve('partial');
+
+  assert.equal(result.status, 'not_found');
+  assert.equal(result.resolved, true);
+  assert.equal(result.address, '192.0.2.40');
+  assert.equal(result.reason, 'lookup_error');
+  assert.deepEqual(result.errors, [{
+    recordType: 'TXT',
+    code: 'SERVFAIL',
+    message: 'TXT lookup failed'
+  }]);
+  assert.equal(result.attempts[0].status, 'lookup_error');
 });
 
 test('returns address, capabilities, protocols, and SKILL.md status', async () => {

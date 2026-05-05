@@ -28,6 +28,10 @@ function emptyRecords() {
   };
 }
 
+function isLookupErrorStatus(status) {
+  return status === 'error' || status === 'lookup_error' || status === 'dns_error';
+}
+
 function normalizeDnsResult(result, source) {
   const records = {
     ...emptyRecords(),
@@ -63,12 +67,31 @@ async function resolveName(source, name) {
   };
 
   return normalizeDnsResult({
-    status: records.TXT.length > 0 ? 'ok' : 'no_records',
+    status: records.TXT.length > 0
+      ? 'ok'
+      : (isLookupErrorStatus(txt.status) ? 'lookup_error' : 'no_records'),
     records,
-    errors: txt.status === 'error'
+    errors: isLookupErrorStatus(txt.status)
       ? [{code: txt.code, message: txt.message}]
       : []
   }, source);
+}
+
+function txtLookupError(dnsResult) {
+  const txtError = (dnsResult.errors ?? [])
+    .find((error) => !error.recordType || error.recordType === 'TXT');
+
+  if (txtError)
+    return txtError;
+
+  if (isLookupErrorStatus(dnsResult.status) && dnsResult.records.TXT.length === 0) {
+    return {
+      code: dnsResult.status,
+      message: 'DNS lookup failed before TXT metadata could be read.'
+    };
+  }
+
+  return null;
 }
 
 function metadataAttemptFromParsed(lookup, parsed, records) {
@@ -91,10 +114,23 @@ async function findMetadata(source, normalizedName, dnsResult, lookupLocations) 
 
     if (lookup.queryName === normalizedName) {
       records = dnsResult.records.TXT;
+
+      const error = records.length === 0 ? txtLookupError(dnsResult) : null;
+
+      if (error) {
+        attempts.push({
+          ...lookup,
+          status: 'lookup_error',
+          code: error.code,
+          message: error.message,
+          records: []
+        });
+        continue;
+      }
     } else {
       const response = await source.resolveTxt(lookup.queryName);
 
-      if (response.status === 'error') {
+      if (isLookupErrorStatus(response.status)) {
         attempts.push({
           ...lookup,
           status: 'lookup_error',
@@ -232,6 +268,7 @@ export class AgentIdentityResolver {
       recordType: dnsResult.recordType,
       source: dnsResult.source,
       records: dnsResult.records,
+      errors: dnsResult.errors,
       agentReady,
       metadataFound,
       metadataSource: metadataFound ? 'TXT' : null,

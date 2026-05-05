@@ -1,7 +1,7 @@
 import {Resolver} from 'node:dns/promises';
 
 function isNoRecord(error) {
-  return error?.code === 'ENODATA' || error?.code === 'ENOTFOUND';
+  return error?.code === 'ENODATA';
 }
 
 function unique(values) {
@@ -110,26 +110,31 @@ export class DnsHandshakeSource {
   }
 
   async resolveName(name) {
-    const [a, aaaa, txt] = await Promise.all([
-      this.resolveA(name),
-      this.resolveAAAA(name),
-      this.resolveTxt(name)
+    const lookups = await Promise.all([
+      this.resolveA(name).then((result) => ({recordType: 'A', result})),
+      this.resolveAAAA(name).then((result) => ({recordType: 'AAAA', result})),
+      this.resolveTxt(name).then((result) => ({recordType: 'TXT', result}))
     ]);
+    const a = lookups.find((lookup) => lookup.recordType === 'A').result;
+    const aaaa = lookups.find((lookup) => lookup.recordType === 'AAAA').result;
+    const txt = lookups.find((lookup) => lookup.recordType === 'TXT').result;
     const records = {
       A: a.records,
       AAAA: aaaa.records,
       TXT: txt.records
     };
     const addresses = unique([...records.A, ...records.AAAA]);
-    const errors = [a, aaaa, txt]
-      .filter((result) => result.status === 'error')
-      .map((result) => ({
+    const hasRecords = addresses.length > 0 || records.TXT.length > 0;
+    const errors = lookups
+      .filter(({result}) => result.status === 'error')
+      .map(({recordType, result}) => ({
+        recordType,
         code: result.code,
         message: result.message
       }));
 
     return {
-      status: addresses.length > 0 || records.TXT.length > 0 ? 'ok' : 'no_records',
+      status: hasRecords ? 'ok' : (errors.length > 0 ? 'lookup_error' : 'no_records'),
       resolved: addresses.length > 0,
       addresses,
       address: addresses[0] ?? null,
