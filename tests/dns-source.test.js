@@ -69,6 +69,11 @@ test('DNS source returns no_records when A, AAAA, and TXT are empty without erro
     AAAA: [],
     TXT: []
   });
+  assert.deepEqual(result.recordStatus, {
+    A: 'no_records',
+    AAAA: 'no_records',
+    TXT: 'no_records'
+  });
   assert.deepEqual(result.errors, []);
 });
 
@@ -88,6 +93,11 @@ for (const code of noRecordCodes) {
       A: [],
       AAAA: [],
       TXT: []
+    });
+    assert.deepEqual(result.recordStatus, {
+      A: 'no_records',
+      AAAA: 'no_records',
+      TXT: 'no_records'
     });
     assert.deepEqual(result.errors, []);
   });
@@ -115,6 +125,11 @@ for (const code of [
       AAAA: [],
       TXT: []
     });
+    assert.deepEqual(result.recordStatus, {
+      A: 'error',
+      AAAA: 'error',
+      TXT: 'error'
+    });
     assert.deepEqual(result.errors.map((error) => [error.recordType, error.code]), [
       ['A', code],
       ['AAAA', code],
@@ -136,6 +151,7 @@ test('DNS source returns ok without errors when A records resolve and TXT is ENO
   assert.equal(result.resolved, true);
   assert.deepEqual(result.addresses, ['192.0.2.10']);
   assert.deepEqual(result.records.TXT, []);
+  assert.equal(result.recordStatus.TXT, 'no_records');
   assert.deepEqual(result.errors, []);
 });
 
@@ -152,6 +168,7 @@ test('DNS source returns ok with A records when TXT lookup has a real failure', 
   assert.equal(result.resolved, true);
   assert.deepEqual(result.addresses, ['192.0.2.10']);
   assert.deepEqual(result.records.TXT, []);
+  assert.equal(result.recordStatus.TXT, 'error');
   assert.deepEqual(result.errors.map((error) => [error.recordType, error.code]), [
     ['TXT', 'SERVFAIL']
   ]);
@@ -171,6 +188,11 @@ test('DNS source returns ok without errors when TXT records resolve and address 
   assert.deepEqual(result.records.TXT, [[
     'agent-identity:v1={"version":1,"endpoint":"https://example.test"}'
   ]]);
+  assert.deepEqual(result.recordStatus, {
+    A: 'no_records',
+    AAAA: 'no_records',
+    TXT: 'ok'
+  });
   assert.deepEqual(result.errors, []);
 });
 
@@ -188,6 +210,11 @@ test('DNS source returns ok with TXT records when address lookups have real fail
   assert.deepEqual(result.records.TXT, [[
     'agent-identity:v1={"version":1,"endpoint":"https://example.test"}'
   ]]);
+  assert.deepEqual(result.recordStatus, {
+    A: 'error',
+    AAAA: 'error',
+    TXT: 'ok'
+  });
   assert.deepEqual(result.errors.map((error) => [error.recordType, error.code]), [
     ['A', 'ECONNREFUSED'],
     ['AAAA', 'TIMEOUT']

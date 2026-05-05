@@ -129,6 +129,11 @@ export class DnsHandshakeSource {
       AAAA: aaaa.records,
       TXT: txt.records
     };
+    const recordStatus = {
+      A: a.status,
+      AAAA: aaaa.status,
+      TXT: txt.status
+    };
     const addresses = unique([...records.A, ...records.AAAA]);
     const hasRecords = addresses.length > 0 || records.TXT.length > 0;
     const errors = lookups
@@ -148,6 +153,7 @@ export class DnsHandshakeSource {
         ? 'A'
         : (records.AAAA.length > 0 ? 'AAAA' : null),
       records,
+      recordStatus,
       source: this.sourceInfo(),
       errors
     };

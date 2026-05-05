@@ -60,8 +60,21 @@ class LookupErrorSource {
       address: null,
       recordType: null,
       records: emptyRecords(),
+      recordStatus: {
+        A: 'error',
+        AAAA: 'error',
+        TXT: 'error'
+      },
       source: this.sourceInfo(),
       errors: [{
+        recordType: 'A',
+        code: 'SERVFAIL',
+        message: 'A lookup failed'
+      }, {
+        recordType: 'AAAA',
+        code: 'TIMEOUT',
+        message: 'AAAA lookup failed'
+      }, {
         recordType: 'TXT',
         code: 'SERVFAIL',
         message: 'TXT lookup failed'
@@ -97,11 +110,101 @@ class PartialTxtErrorSource {
         ...emptyRecords(),
         A: ['192.0.2.40']
       },
+      recordStatus: {
+        A: 'ok',
+        AAAA: 'no_records',
+        TXT: 'error'
+      },
       source: this.sourceInfo(),
       errors: [{
         recordType: 'TXT',
         code: 'SERVFAIL',
         message: 'TXT lookup failed'
+      }]
+    };
+  }
+
+  async resolveTxt() {
+    return {
+      status: 'no_records',
+      records: []
+    };
+  }
+}
+
+class AddressErrorNoTxtSource {
+  sourceInfo() {
+    return {
+      type: 'address-error-no-txt-test'
+    };
+  }
+
+  async resolveName() {
+    return {
+      status: 'lookup_error',
+      resolved: false,
+      addresses: [],
+      address: null,
+      recordType: null,
+      records: emptyRecords(),
+      recordStatus: {
+        A: 'error',
+        AAAA: 'error',
+        TXT: 'no_records'
+      },
+      source: this.sourceInfo(),
+      errors: [{
+        recordType: 'A',
+        code: 'SERVFAIL',
+        message: 'A lookup failed'
+      }, {
+        recordType: 'AAAA',
+        code: 'TIMEOUT',
+        message: 'AAAA lookup failed'
+      }]
+    };
+  }
+
+  async resolveTxt() {
+    return {
+      status: 'no_records',
+      records: []
+    };
+  }
+}
+
+class AddressErrorMetadataSource {
+  sourceInfo() {
+    return {
+      type: 'address-error-metadata-test'
+    };
+  }
+
+  async resolveName() {
+    return {
+      status: 'ok',
+      resolved: false,
+      addresses: [],
+      address: null,
+      recordType: null,
+      records: {
+        ...emptyRecords(),
+        TXT: metadata({endpoint: 'https://metadata.example/agent.json'})
+      },
+      recordStatus: {
+        A: 'error',
+        AAAA: 'error',
+        TXT: 'ok'
+      },
+      source: this.sourceInfo(),
+      errors: [{
+        recordType: 'A',
+        code: 'SERVFAIL',
+        message: 'A lookup failed'
+      }, {
+        recordType: 'AAAA',
+        code: 'TIMEOUT',
+        message: 'AAAA lookup failed'
       }]
     };
   }
@@ -262,6 +365,14 @@ test('returns lookup_error when DNS metadata lookup fails before records are rea
   assert.equal(result.skill.status, 'skipped_no_metadata');
   assert.equal(result.attempts[0].status, 'lookup_error');
   assert.deepEqual(result.errors, [{
+    recordType: 'A',
+    code: 'SERVFAIL',
+    message: 'A lookup failed'
+  }, {
+    recordType: 'AAAA',
+    code: 'TIMEOUT',
+    message: 'AAAA lookup failed'
+  }, {
     recordType: 'TXT',
     code: 'SERVFAIL',
     message: 'TXT lookup failed'
@@ -270,6 +381,54 @@ test('returns lookup_error when DNS metadata lookup fails before records are rea
     result.warnings.some((warning) => /DNS lookup warning: SERVFAIL TXT lookup failed/.test(warning)),
     true
   );
+});
+
+test('does not synthesize TXT lookup_error from address lookup failures', async () => {
+  const resolver = new AgentIdentityResolver({
+    source: new AddressErrorNoTxtSource()
+  });
+
+  const result = await resolver.resolve('address-broken');
+
+  assert.equal(result.status, 'not_found');
+  assert.equal(result.reason, 'no_records');
+  assert.equal(result.metadataFound, false);
+  assert.equal(result.attempts[0].status, 'no_records');
+  assert.deepEqual(result.errors.map((error) => [error.recordType, error.code]), [
+    ['A', 'SERVFAIL'],
+    ['AAAA', 'TIMEOUT']
+  ]);
+  assert.equal(
+    result.warnings.some((warning) => /TXT metadata lookup failed/.test(warning)),
+    false
+  );
+});
+
+test('parses metadata when address lookups fail but TXT lookup succeeds', async () => {
+  const skillFetcher = new MockSkillFetcher({
+    '/SKILL.md': {
+      status: 200,
+      body: '# Metadata Skill'
+    }
+  });
+  const resolver = new AgentIdentityResolver({
+    source: new AddressErrorMetadataSource(),
+    skill: {
+      fetcher: skillFetcher
+    }
+  });
+
+  const result = await resolver.resolve('metadata-only');
+
+  assert.equal(result.status, 'found');
+  assert.equal(result.metadataFound, true);
+  assert.equal(result.identity.endpoint, 'https://metadata.example/agent.json');
+  assert.equal(result.reason, undefined);
+  assert.deepEqual(result.errors.map((error) => [error.recordType, error.code]), [
+    ['A', 'SERVFAIL'],
+    ['AAAA', 'TIMEOUT']
+  ]);
+  assert.equal(result.attempts[0].status, 'found');
 });
 
 test('preserves TXT lookup errors when address records resolve', async () => {
@@ -283,6 +442,7 @@ test('preserves TXT lookup errors when address records resolve', async () => {
   assert.equal(result.resolved, true);
   assert.equal(result.address, '192.0.2.40');
   assert.equal(result.reason, 'lookup_error');
+  assert.equal(result.recordStatus.TXT, 'error');
   assert.deepEqual(result.errors, [{
     recordType: 'TXT',
     code: 'SERVFAIL',

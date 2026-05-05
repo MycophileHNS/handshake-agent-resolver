@@ -38,6 +38,13 @@ function normalizeDnsResult(result, source) {
     ...(result?.records ?? {})
   };
   const addresses = result?.addresses ?? [...records.A, ...records.AAAA];
+  const hasExplicitRecordStatus = Boolean(result?.recordStatus);
+  const recordStatus = {
+    A: records.A.length > 0 ? 'ok' : 'no_records',
+    AAAA: records.AAAA.length > 0 ? 'ok' : 'no_records',
+    TXT: records.TXT.length > 0 ? 'ok' : 'no_records',
+    ...(result?.recordStatus ?? {})
+  };
 
   return {
     status: result?.status ?? 'no_records',
@@ -48,6 +55,8 @@ function normalizeDnsResult(result, source) {
       records.A.length > 0 ? 'A' : (records.AAAA.length > 0 ? 'AAAA' : null)
     ),
     records,
+    recordStatus,
+    hasExplicitRecordStatus,
     source: result?.source ?? source.sourceInfo?.() ?? {type: 'unknown'},
     errors: result?.errors ?? []
   };
@@ -71,25 +80,51 @@ async function resolveName(source, name) {
       ? 'ok'
       : (isLookupErrorStatus(txt.status) ? 'lookup_error' : 'no_records'),
     records,
+    recordStatus: {
+      A: 'no_records',
+      AAAA: 'no_records',
+      TXT: txt.status
+    },
     errors: isLookupErrorStatus(txt.status)
-      ? [{code: txt.code, message: txt.message}]
+      ? [{
+        recordType: 'TXT',
+        code: txt.code,
+        message: txt.message
+      }]
       : []
   }, source);
 }
 
+function hasOnlyAddressErrors(errors) {
+  return errors.length > 0
+    && errors.every((error) => error.recordType === 'A' || error.recordType === 'AAAA');
+}
+
 function txtLookupError(dnsResult) {
+  const errors = dnsResult.errors ?? [];
   const txtError = (dnsResult.errors ?? [])
     .find((error) => !error.recordType || error.recordType === 'TXT');
 
   if (txtError)
     return txtError;
 
-  if (isLookupErrorStatus(dnsResult.status) && dnsResult.records.TXT.length === 0) {
+  if (isLookupErrorStatus(dnsResult.recordStatus?.TXT) && dnsResult.records.TXT.length === 0) {
+    return {
+      code: dnsResult.recordStatus.TXT,
+      message: 'TXT metadata lookup failed before records could be read.'
+    };
+  }
+
+  if (
+    !dnsResult.hasExplicitRecordStatus
+    && isLookupErrorStatus(dnsResult.status)
+    && dnsResult.records.TXT.length === 0
+    && !hasOnlyAddressErrors(errors)
+  )
     return {
       code: dnsResult.status,
       message: 'DNS lookup failed before TXT metadata could be read.'
     };
-  }
 
   return null;
 }
@@ -268,6 +303,7 @@ export class AgentIdentityResolver {
       recordType: dnsResult.recordType,
       source: dnsResult.source,
       records: dnsResult.records,
+      recordStatus: dnsResult.recordStatus,
       errors: dnsResult.errors,
       agentReady,
       metadataFound,
