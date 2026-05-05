@@ -16,6 +16,16 @@ function selectAddress(addresses = []) {
   return addresses.find(Boolean) ?? null;
 }
 
+function normalizeHostname(hostname) {
+  return hostname?.replace(/\.$/, '').toLowerCase() ?? '';
+}
+
+function candidateUsesResolvedName(candidateUrl, name) {
+  const url = new URL(candidateUrl);
+
+  return normalizeHostname(url.hostname) === normalizeHostname(name);
+}
+
 function requestSkill(urlString, {
   address,
   timeoutMs = DEFAULT_SKILL_FETCH_TIMEOUT_MS,
@@ -148,8 +158,11 @@ export async function discoverSkillMd({
   const attempts = [];
 
   for (const candidate of candidates) {
+    const candidateAddress = candidateUsesResolvedName(candidate.url, name)
+      ? address
+      : null;
     const attempt = await fetchCandidate(candidate, {
-      address,
+      address: candidateAddress,
       name,
       timeoutMs,
       fetcher
