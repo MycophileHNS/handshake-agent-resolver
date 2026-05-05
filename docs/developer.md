@@ -41,6 +41,13 @@ Query the HTTP service:
 curl 'http://127.0.0.1:8787/resolve?name=alice'
 ```
 
+Force exploratory SKILL.md discovery when compatible metadata is absent:
+
+```sh
+npm run resolve -- alice --force-skill-discovery
+curl 'http://127.0.0.1:8787/resolve?name=alice&forceSkillDiscovery=1'
+```
+
 ## Code Map
 
 - `src/resolver.js`: main lookup orchestration.
@@ -100,8 +107,12 @@ adapter without changing metadata parsing.
 ## SKILL.md Fetching
 
 DNS resolution and HTTP fetching are separate modules. `src/resolver.js` resolves
-the name first, then `src/skill-fetch.js` checks SKILL.md paths. The fetcher has a
-timeout and can be injected in tests.
+the name first, then `src/skill-fetch.js` checks SKILL.md paths only after
+compatible agent metadata is found. This avoids unnecessary probes against
+ordinary Handshake names. Callers can opt into exploratory checking with
+`forceSkillDiscovery`.
+
+The fetcher has a timeout and can be injected in tests.
 
 When an address is available, the HTTP layer connects to that address while
 preserving the logical hostname in the Host header and HTTPS SNI.

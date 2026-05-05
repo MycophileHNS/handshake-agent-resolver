@@ -24,6 +24,11 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === '--force-skill-discovery') {
+      args.forceSkillDiscovery = true;
+      continue;
+    }
+
     if (!args.name) {
       args.name = arg;
       continue;
@@ -36,11 +41,12 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`Usage: npm run resolve -- <handshake-name> [--server <dns-server>]
+  console.log(`Usage: npm run resolve -- <handshake-name> [--server <dns-server>] [--force-skill-discovery]
 
 Examples:
   npm run resolve -- alice
-  npm run resolve -- alice --server 127.0.0.1:5350`);
+  npm run resolve -- alice --server 127.0.0.1:5350
+  npm run resolve -- alice --force-skill-discovery`);
 }
 
 try {
@@ -54,7 +60,8 @@ try {
   const result = await resolveAgentIdentity(args.name, {
     dns: args.servers.length > 0
       ? {servers: args.servers}
-      : undefined
+      : undefined,
+    forceSkillDiscovery: args.forceSkillDiscovery
   });
 
   console.log(JSON.stringify(result, null, 2));

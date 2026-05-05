@@ -19,10 +19,16 @@ class MockSkillFetcher {
   constructor(responses = {}) {
     this.responses = responses;
     this.requests = [];
+    this.requestOptions = [];
   }
 
-  async fetch(url) {
+  async fetch(url, options = {}) {
     this.requests.push(url);
+    this.requestOptions.push({
+      url,
+      address: options.address ?? null,
+      name: options.name ?? null
+    });
     const parsed = new URL(url);
     return this.responses[parsed.pathname] ?? {
       status: 404,
@@ -35,7 +41,7 @@ function resolverFor(recordsByName, options = {}) {
   const source = new MockHandshakeSource(recordsByName);
   const resolver = new AgentIdentityResolver({
     source,
-    skill: options.skill
+    ...options
   });
 
   return {
@@ -81,10 +87,20 @@ test('resolves compatible metadata for arbitrary Handshake names', async () => {
 });
 
 test('returns not_found when TXT records contain no compatible metadata', async () => {
+  const skillFetcher = new MockSkillFetcher({
+    '/SKILL.md': {
+      status: 200,
+      body: '# Should Not Be Requested'
+    }
+  });
   const {resolver} = resolverFor({
     plainname: {
       A: ['192.0.2.12'],
       TXT: [['v=spf1 -all'], ['hello=world']]
+    }
+  }, {
+    skill: {
+      fetcher: skillFetcher
     }
   });
 
@@ -92,7 +108,13 @@ test('returns not_found when TXT records contain no compatible metadata', async 
 
   assert.equal(result.status, 'not_found');
   assert.equal(result.resolved, true);
+  assert.equal(result.address, '192.0.2.12');
+  assert.equal(result.agentReady, false);
+  assert.equal(result.metadataFound, false);
+  assert.equal(result.skill.checked, false);
+  assert.equal(result.skill.status, 'skipped_no_metadata');
   assert.equal(result.reason, 'no_compatible_records');
+  assert.deepEqual(skillFetcher.requests, []);
 });
 
 test('returns not_found with malformed_records for malformed metadata', async () => {
@@ -213,6 +235,40 @@ test('returns address, capabilities, protocols, and SKILL.md status', async () =
   assert.equal(result.skill.found, true);
   assert.equal(result.skill.canonicalPath, '/SKILL.md');
   assert.equal(result.skill.metadata.name, 'Resolver Skill');
+  assert.deepEqual(skillFetcher.requests, ['http://example.invalid/SKILL.md']);
+});
+
+test('forces SKILL.md discovery without compatible metadata when requested', async () => {
+  const skillFetcher = new MockSkillFetcher();
+  const {resolver} = resolverFor({
+    plainname: {
+      A: ['192.0.2.12'],
+      TXT: [['v=spf1 -all']]
+    }
+  }, {
+    forceSkillDiscovery: true,
+    skill: {
+      fetcher: skillFetcher
+    }
+  });
+
+  const result = await resolver.resolve('plainname');
+
+  assert.equal(result.status, 'not_found');
+  assert.equal(result.metadataFound, false);
+  assert.equal(result.skill.checked, true);
+  assert.equal(result.skill.found, false);
+  assert.deepEqual(result.skill.attempts.map((attempt) => attempt.path), [
+    '/SKILL.md',
+    '/skill.md',
+    '/.well-known/agent/SKILL.md'
+  ]);
+  assert.deepEqual(skillFetcher.requests, [
+    'https://plainname/SKILL.md',
+    'https://plainname/skill.md',
+    'https://plainname/.well-known/agent/SKILL.md'
+  ]);
+  assert.equal(skillFetcher.requestOptions[0].address, '192.0.2.12');
 });
 
 test('does not hardcode any special namespace', async () => {
@@ -269,6 +325,7 @@ test('SKILL.md discovery uses only record-provided locations and canonical fallb
   assert.deepEqual(source.nameRequests, ['localname']);
   assert.deepEqual(source.requests, []);
   assert.deepEqual(skillFetcher.requests, ['https://skills.example.test/SKILL.md']);
+  assert.equal(skillFetcher.requestOptions[0].address, null);
   assert.equal(
     result.warnings.some((warning) => /registry|directory|root server|service list/i.test(warning)),
     false

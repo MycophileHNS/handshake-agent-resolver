@@ -51,11 +51,18 @@ function sendJson(res, statusCode, body) {
   res.end(`${json}\n`);
 }
 
+function booleanParam(searchParams, name) {
+  const value = searchParams.get(name);
+
+  return value === '1' || value === 'true' || value === 'yes';
+}
+
 function printHelp() {
   console.log(`Usage: npm run serve -- [--port 8787] [--server <dns-server>]
 
 Resolve with:
-  curl 'http://127.0.0.1:8787/resolve?name=alice'`);
+  curl 'http://127.0.0.1:8787/resolve?name=alice'
+  curl 'http://127.0.0.1:8787/resolve?name=alice&forceSkillDiscovery=1'`);
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -90,7 +97,9 @@ const server = http.createServer(async (req, res) => {
     const result = await resolveAgentIdentity(name, {
       dns: args.servers.length > 0
         ? {servers: args.servers}
-        : undefined
+        : undefined,
+      forceSkillDiscovery: booleanParam(url.searchParams, 'forceSkillDiscovery')
+        || booleanParam(url.searchParams, 'force-skill-discovery')
     });
 
     sendJson(res, result.status === 'found' ? 200 : 404, result);

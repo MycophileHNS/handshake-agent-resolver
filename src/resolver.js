@@ -165,11 +165,30 @@ function metadataAddress(metadata) {
   return [metadata.address];
 }
 
+function skippedSkill(reason) {
+  return {
+    checked: false,
+    found: false,
+    status: reason,
+    reason,
+    canonicalPath: null,
+    url: null,
+    attempts: [],
+    warnings: []
+  };
+}
+
 export class AgentIdentityResolver {
   constructor(options = {}) {
     this.source = options.source ?? new DnsHandshakeSource(options.dns ?? {});
     this.lookupLocations = options.lookupLocations;
     this.skill = options.skill ?? {};
+    this.forceSkillDiscovery = Boolean(
+      options.forceSkillDiscovery
+      ?? options.checkSkillWithoutMetadata
+      ?? this.skill.forceSkillDiscovery
+      ?? this.skill.checkSkillWithoutMetadata
+    );
   }
 
   async resolve(name) {
@@ -186,14 +205,17 @@ export class AgentIdentityResolver {
     const addresses = dnsResult.addresses.length > 0
       ? dnsResult.addresses
       : metadataAddress(metadata);
-    const skill = await discoverSkillMd({
-      name: normalizedName,
-      metadata: metadata ?? {},
-      addresses,
-      timeoutMs: this.skill.timeoutMs,
-      fetcher: this.skill.fetcher,
-      defaultScheme: this.skill.defaultScheme
-    });
+    const shouldDiscoverSkill = metadataFound || this.forceSkillDiscovery;
+    const skill = shouldDiscoverSkill
+      ? await discoverSkillMd({
+        name: normalizedName,
+        metadata: metadata ?? {},
+        addresses,
+        timeoutMs: this.skill.timeoutMs,
+        fetcher: this.skill.fetcher,
+        defaultScheme: this.skill.defaultScheme
+      })
+      : skippedSkill('skipped_no_metadata');
     const warnings = collectWarnings({
       dnsResult,
       metadataResult,
@@ -211,6 +233,7 @@ export class AgentIdentityResolver {
       source: dnsResult.source,
       records: dnsResult.records,
       agentReady,
+      metadataFound,
       metadataSource: metadataFound ? 'TXT' : null,
       rawMetadata: metadataResult.parsed?.record ?? null,
       metadata,

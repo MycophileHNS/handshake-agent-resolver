@@ -12,7 +12,7 @@ result:
 1. DNS resolution output from a caller-provided source, hnsd, or an
    hnsd-compatible resolver.
 2. Agent metadata parsed from compatible TXT records.
-3. SKILL.md discovery and fetch status.
+3. SKILL.md discovery and fetch status when compatible metadata is present.
 4. Address, capability, and supported protocol information.
 
 Compatibility is based on records published by the name owner. The resolver does
@@ -61,7 +61,10 @@ The normal DNS portion of the response includes:
 ### 2. Check SKILL.md
 
 DNS and HTTP are separate steps. After DNS resolution and metadata parsing, the
-resolver checks SKILL.md paths in this order:
+resolver checks SKILL.md only when compatible agent metadata is found. This keeps
+ordinary Handshake names from receiving unnecessary HTTP(S) probes.
+
+When SKILL.md discovery runs, paths are checked in this order:
 
 1. Metadata-declared `skill` path, if present.
 2. `/SKILL.md`
@@ -78,6 +81,22 @@ Each attempt records:
 
 When SKILL.md is found, the response includes a SHA-256 content hash and parsed
 frontmatter or basic heading metadata.
+
+When compatible metadata is absent, the response includes address data when
+available, `metadataFound: false`, `agentReady: false`, and a SKILL.md object
+with `checked: false` and `status: "skipped_no_metadata"`.
+
+Developers can explicitly force exploratory SKILL.md discovery:
+
+```sh
+npm run resolve -- example --force-skill-discovery
+```
+
+The HTTP API accepts the same behavior with a query parameter:
+
+```sh
+curl 'http://127.0.0.1:8787/resolve?name=example&forceSkillDiscovery=1'
+```
 
 ### 3. Return Address, Capabilities, And Protocols
 
@@ -194,6 +213,7 @@ Supported metadata fields:
     "TXT": []
   },
   "agentReady": true,
+  "metadataFound": true,
   "metadataSource": "TXT",
   "rawMetadata": "agent-identity:v1=ready=1;skill=/SKILL.md;protocols=mcp,a2a,http;capabilities=search,resolve,verify;endpoint=https://example.invalid",
   "metadata": {
@@ -244,6 +264,13 @@ To test manually:
 
 ```sh
 npm run resolve -- <handshake-name> --server 127.0.0.1:<port>
+```
+
+To force SKILL.md discovery for exploratory testing when compatible metadata has
+not been published:
+
+```sh
+npm run resolve -- <handshake-name> --server 127.0.0.1:<port> --force-skill-discovery
 ```
 
 For local HTTP SKILL.md testing, publish metadata with an HTTP endpoint and run a
