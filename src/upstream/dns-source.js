@@ -1,7 +1,13 @@
 import {Resolver} from 'node:dns/promises';
 
+const NO_RECORD_CODES = new Set([
+  'ENODATA',
+  'ENOTFOUND',
+  'NOTFOUND'
+]);
+
 function isNoRecord(error) {
-  return error?.code === 'ENODATA';
+  return NO_RECORD_CODES.has(error?.code);
 }
 
 function unique(values) {
