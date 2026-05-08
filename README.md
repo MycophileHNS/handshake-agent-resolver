@@ -65,3 +65,4 @@ npm test
 - [Architecture Note](docs/architecture.md)
 - [Metadata Format](docs/metadata.md)
 - [Agent-Aware Resolver](docs/agent-aware-resolver.md)
+- - [Beginner Guide: Publishing Agent Identity TXT Records](./docs/beginner-guide.md)
