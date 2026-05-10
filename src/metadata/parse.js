@@ -140,23 +140,31 @@ function applyHeadlessProfileRecord(value, metadata) {
 function parseHeadlessProfileRecords(values) {
   const metadata = {version: 1};
   const records = [];
+  let malformedMessage = null;
 
   for (const value of values) {
     const headlessProfileKey = getHeadlessProfileKey(value);
     if (!headlessProfileKey) continue;
 
+    records.push(value);
+
     if (value.length > MAX_TXT_VALUE_LENGTH) {
-      return {
-        status: 'malformed',
-        message: 'HeadlessProfile TXT value is too long',
-        records: [...records, value]
-      };
+      malformedMessage = malformedMessage ?? 'HeadlessProfile TXT value is too long';
+      continue;
     }
 
-    if (applyHeadlessProfileRecord(value, metadata)) records.push(value);
+    applyHeadlessProfileRecord(value, metadata);
   }
 
   if (records.length === 0) return null;
+
+  if (malformedMessage) {
+    return {
+      status: 'malformed',
+      message: malformedMessage,
+      records
+    };
+  }
 
   const validation = validateAgentIdentityMetadata(metadata);
   if (!validation.ok) {
