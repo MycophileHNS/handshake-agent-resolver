@@ -149,7 +149,7 @@ function parseHeadlessProfileRecords(values) {
       return {
         status: 'malformed',
         message: 'HeadlessProfile TXT value is too long',
-        records
+        records: [...records, value]
       };
     }
 
