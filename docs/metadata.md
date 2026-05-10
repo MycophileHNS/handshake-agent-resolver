@@ -85,6 +85,10 @@ Versioned metadata takes precedence. If a compatible `agent-identity:v1=` or
 `hns-agent=v1` record is present, the resolver returns that record and does not
 merge it with HeadlessProfile bridge records.
 
+Malformed or unsupported versioned records also prevent bridge fallback. This
+keeps broken primary metadata visible instead of letting valid HeadlessProfile
+records hide the error.
+
 ## Fields
 
 Required:
