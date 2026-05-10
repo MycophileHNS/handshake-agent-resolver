@@ -156,6 +156,18 @@ test('parses HeadlessProfile aliases and equals delimiters', () => {
   assert.equal(result.identity.protocols[0].id, 'arp');
 });
 
+test('does not report bridged records as ignored when bridge succeeds', () => {
+  const result = parseTxtRecords([
+    ['v=spf1 -all'],
+    ['agent-manifest:https://example.test/agent.json'],
+    ['agent-capabilities=search']
+  ]);
+
+  assert.equal(result.status, 'found');
+  assert.equal(result.record, 'agent-manifest:https://example.test/agent.json\nagent-capabilities=search');
+  assert.deepEqual(result.ignored, ['v=spf1 -all']);
+});
+
 test('accumulates repeated HeadlessProfile capability records', () => {
   const result = parseTxtRecords([
     ['agent-manifest:https://example.test/agent.json'],
