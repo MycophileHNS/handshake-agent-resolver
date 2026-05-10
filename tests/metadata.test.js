@@ -156,6 +156,19 @@ test('parses HeadlessProfile aliases and equals delimiters', () => {
   assert.equal(result.identity.protocols[0].id, 'arp');
 });
 
+test('ignores oversized unrelated TXT records before bridge fallback', () => {
+  const result = parseTxtRecords([
+    [`verification=${'x'.repeat(5000)}`],
+    ['agent-manifest:https://headless.example/agent.json'],
+    ['skill-md:https://headless.example/SKILL.md']
+  ]);
+
+  assert.equal(result.status, 'found');
+  assert.equal(result.identity.endpoint, 'https://headless.example/agent.json');
+  assert.equal(result.identity.skill, 'https://headless.example/SKILL.md');
+  assert.equal(result.malformed.length, 0);
+});
+
 test('prefers versioned metadata over HeadlessProfile bridge records', () => {
   const result = parseTxtRecords([
     ['agent-manifest:https://headless.example/agent.json'],
