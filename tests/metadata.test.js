@@ -166,6 +166,20 @@ test('prefers versioned metadata over HeadlessProfile bridge records', () => {
   assert.equal(result.identity.endpoint, 'https://versioned.example/agent.json');
 });
 
+test('does not let bridge records mask malformed versioned metadata', () => {
+  const result = parseTxtRecords([
+    ['agent-identity:v1={not-json'],
+    ['agent-manifest:https://headless.example/agent.json'],
+    ['skill-md:https://headless.example/SKILL.md']
+  ]);
+
+  assert.equal(result.status, 'malformed_records');
+  assert.equal(result.identity, null);
+  assert.equal(result.record, null);
+  assert.equal(result.malformed.length, 1);
+  assert.match(result.malformed[0].message, /could not be parsed/);
+});
+
 test('preserves richer capability objects', () => {
   const result = parseTxtRecords([
     [
