@@ -19,14 +19,8 @@ test('parses compatible agent identity metadata', () => {
   assert.equal(result.identity.version, 1);
   assert.equal(result.identity.name, 'Example Agent');
   assert.deepEqual(result.identity.capabilities, [
-    {
-      id: 'resolve',
-      name: 'resolve'
-    },
-    {
-      id: 'describe',
-      name: 'describe'
-    }
+    {id: 'resolve', name: 'resolve'},
+    {id: 'describe', name: 'describe'}
   ]);
 });
 
@@ -100,32 +94,14 @@ test('parses compact agent-identity:v1 metadata', () => {
   assert.equal(result.identity.address, '192.0.2.10');
   assert.equal(result.identity.description, 'Resolver agent');
   assert.deepEqual(result.identity.protocols, [
-    {
-      id: 'mcp',
-      name: 'mcp'
-    },
-    {
-      id: 'a2a',
-      name: 'a2a'
-    },
-    {
-      id: 'http',
-      name: 'http'
-    }
+    {id: 'mcp', name: 'mcp'},
+    {id: 'a2a', name: 'a2a'},
+    {id: 'http', name: 'http'}
   ]);
   assert.deepEqual(result.identity.capabilities, [
-    {
-      id: 'search',
-      name: 'search'
-    },
-    {
-      id: 'resolve',
-      name: 'resolve'
-    },
-    {
-      id: 'verify',
-      name: 'verify'
-    }
+    {id: 'search', name: 'search'},
+    {id: 'resolve', name: 'resolve'},
+    {id: 'verify', name: 'verify'}
   ]);
 });
 
@@ -144,6 +120,52 @@ test('parses hns-agent compact metadata', () => {
   assert.equal(result.identity.capabilities[0].id, 'search');
 });
 
+test('parses HeadlessProfile agent TXT bridge records', () => {
+  const result = parseTxtRecords([
+    ['agent-manifest:https://example.test/agent.json'],
+    ['skill-md:https://example.test/SKILL.md'],
+    ['agent-capabilities:lookup,describe'],
+    ['arp:https://chat.example.test']
+  ]);
+
+  assert.equal(result.status, 'found');
+  assert.equal(result.identity.version, 1);
+  assert.equal(result.identity.endpoint, 'https://example.test/agent.json');
+  assert.equal(result.identity.skill, 'https://example.test/SKILL.md');
+  assert.deepEqual(result.identity.capabilities, [
+    {id: 'lookup', name: 'lookup'},
+    {id: 'describe', name: 'describe'}
+  ]);
+  assert.deepEqual(result.identity.protocols, [
+    {id: 'arp', name: 'arp'}
+  ]);
+});
+
+test('parses HeadlessProfile aliases and equals delimiters', () => {
+  const result = parseTxtRecords([
+    ['manifest=https://example.test/agent.json'],
+    ['skill=https://example.test/SKILL.md'],
+    ['agent-capabilities=search'],
+    ['arp=https://chat.example.test']
+  ]);
+
+  assert.equal(result.status, 'found');
+  assert.equal(result.identity.endpoint, 'https://example.test/agent.json');
+  assert.equal(result.identity.skill, 'https://example.test/SKILL.md');
+  assert.equal(result.identity.capabilities[0].id, 'search');
+  assert.equal(result.identity.protocols[0].id, 'arp');
+});
+
+test('prefers versioned metadata over HeadlessProfile bridge records', () => {
+  const result = parseTxtRecords([
+    ['agent-manifest:https://headless.example/agent.json'],
+    validRecord({endpoint: 'https://versioned.example/agent.json'})
+  ]);
+
+  assert.equal(result.status, 'found');
+  assert.equal(result.identity.endpoint, 'https://versioned.example/agent.json');
+});
+
 test('preserves richer capability objects', () => {
   const result = parseTxtRecords([
     [
@@ -155,8 +177,6 @@ test('preserves richer capability objects', () => {
           description: 'Find indexed content',
           input: 'query',
           output: 'results',
-          pricing: 'free',
-          auth: 'none',
           endpoint: 'https://example.invalid/search'
         }]
       })}`
@@ -170,8 +190,6 @@ test('preserves richer capability objects', () => {
     description: 'Find indexed content',
     input: 'query',
     output: 'results',
-    pricing: 'free',
-    auth: 'none',
     endpoint: 'https://example.invalid/search'
   }]);
 });
