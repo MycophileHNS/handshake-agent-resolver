@@ -308,23 +308,25 @@ export function parseTxtRecords(records) {
       result.ignored.push(parsed.record);
   }
 
-  const headlessProfile = parseHeadlessProfileRecords(values);
+  if (result.malformed.length === 0 && result.unsupported.length === 0) {
+    const headlessProfile = parseHeadlessProfileRecords(values);
 
-  if (headlessProfile?.status === 'found') {
-    return {
-      ...result,
-      status: 'found',
-      identity: headlessProfile.identity,
-      record: headlessProfile.record
-    };
-  }
+    if (headlessProfile?.status === 'found') {
+      return {
+        ...result,
+        status: 'found',
+        identity: headlessProfile.identity,
+        record: headlessProfile.record
+      };
+    }
 
-  if (headlessProfile?.status === 'malformed') {
-    result.malformed.push({
-      status: 'malformed',
-      message: headlessProfile.message,
-      record: headlessProfile.records.join('\n')
-    });
+    if (headlessProfile?.status === 'malformed') {
+      result.malformed.push({
+        status: 'malformed',
+        message: headlessProfile.message,
+        record: headlessProfile.records.join('\n')
+      });
+    }
   }
 
   if (result.malformed.length > 0)
