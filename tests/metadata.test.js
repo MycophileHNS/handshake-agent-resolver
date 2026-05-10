@@ -156,6 +156,21 @@ test('parses HeadlessProfile aliases and equals delimiters', () => {
   assert.equal(result.identity.protocols[0].id, 'arp');
 });
 
+test('accumulates repeated HeadlessProfile capability records', () => {
+  const result = parseTxtRecords([
+    ['agent-manifest:https://example.test/agent.json'],
+    ['agent-capabilities=search,resolve'],
+    ['agent-capabilities:verify,search']
+  ]);
+
+  assert.equal(result.status, 'found');
+  assert.deepEqual(result.identity.capabilities, [
+    {id: 'search', name: 'search'},
+    {id: 'resolve', name: 'resolve'},
+    {id: 'verify', name: 'verify'}
+  ]);
+});
+
 test('ignores oversized unrelated TXT records before bridge fallback', () => {
   const result = parseTxtRecords([
     [`verification=${'x'.repeat(5000)}`],
