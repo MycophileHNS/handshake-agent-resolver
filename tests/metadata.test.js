@@ -186,6 +186,7 @@ test('accumulates repeated HeadlessProfile capability records', () => {
 test('includes oversized HeadlessProfile record in malformed diagnostics', () => {
   const oversizedRecord = `agent-manifest:${'x'.repeat(5000)}`;
   const result = parseTxtRecords([
+    ['v=spf1 -all'],
     ['agent-capabilities=search'],
     [oversizedRecord]
   ]);
@@ -194,6 +195,7 @@ test('includes oversized HeadlessProfile record in malformed diagnostics', () =>
   assert.equal(result.malformed.length, 1);
   assert.equal(result.malformed[0].record, `agent-capabilities=search\n${oversizedRecord}`);
   assert.match(result.malformed[0].message, /HeadlessProfile TXT value is too long/);
+  assert.deepEqual(result.ignored, ['v=spf1 -all']);
 });
 
 test('ignores oversized unrelated TXT records before bridge fallback', () => {
