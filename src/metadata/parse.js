@@ -314,6 +314,7 @@ export function parseTxtRecords(records) {
         message: headlessProfile.message,
         record: headlessProfile.records.join('\n')
       });
+      result.ignored = result.ignored.filter((record) => !headlessProfile.records.includes(record));
     }
   }
 
