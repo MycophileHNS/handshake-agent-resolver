@@ -170,7 +170,8 @@ function parseHeadlessProfileRecords(values) {
   return {
     status: 'found',
     identity: validation.identity,
-    record: records.join('\n')
+    record: records.join('\n'),
+    records
   };
 }
 
@@ -302,7 +303,8 @@ export function parseTxtRecords(records) {
         ...result,
         status: 'found',
         identity: headlessProfile.identity,
-        record: headlessProfile.record
+        record: headlessProfile.record,
+        ignored: result.ignored.filter((record) => !headlessProfile.records.includes(record))
       };
     }
 
