@@ -101,6 +101,19 @@ function firstDelimiterIndex(value) {
   return Math.min(colonIndex, equalsIndex);
 }
 
+function getHeadlessProfileKey(value) {
+  const index = firstDelimiterIndex(value);
+
+  if (index === -1)
+    return null;
+
+  const key = value.slice(0, index).trim().toLowerCase();
+
+  return HEADLESS_PROFILE_FIELDS.has(key)
+    ? key
+    : null;
+}
+
 function appendUniqueListValue(existing, value) {
   const current = Array.isArray(existing)
     ? existing
@@ -156,6 +169,11 @@ function parseHeadlessProfileRecords(values) {
   const records = [];
 
   for (const value of values) {
+    const headlessProfileKey = getHeadlessProfileKey(value);
+
+    if (!headlessProfileKey)
+      continue;
+
     if (value.length > MAX_TXT_VALUE_LENGTH) {
       return {
         status: 'malformed',
@@ -189,14 +207,6 @@ function parseHeadlessProfileRecords(values) {
 }
 
 function parseMetadataValue(value) {
-  if (value.length > MAX_TXT_VALUE_LENGTH) {
-    return {
-      status: 'malformed',
-      message: 'metadata TXT value is too long',
-      record: value
-    };
-  }
-
   const hnsAgentMatch = value.match(HNS_AGENT_PREFIX_RE);
 
   if (hnsAgentMatch) {
@@ -204,6 +214,14 @@ function parseMetadataValue(value) {
       return {
         status: 'unsupported',
         message: `unsupported hns-agent metadata version: ${hnsAgentMatch[1]}`,
+        record: value
+      };
+    }
+
+    if (value.length > MAX_TXT_VALUE_LENGTH) {
+      return {
+        status: 'malformed',
+        message: 'metadata TXT value is too long',
         record: value
       };
     }
@@ -241,6 +259,14 @@ function parseMetadataValue(value) {
 
     return {
       status: 'ignored',
+      record: value
+    };
+  }
+
+  if (value.length > MAX_TXT_VALUE_LENGTH) {
+    return {
+      status: 'malformed',
+      message: 'metadata TXT value is too long',
       record: value
     };
   }
