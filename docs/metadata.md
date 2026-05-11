@@ -55,12 +55,17 @@ The bridge accepts either `:` or `=` as the delimiter so DNS panels may publish
 records such as `agent-manifest:https://example.test/agent.json` or
 `agent-manifest=https://example.test/agent.json`.
 
+Repeated `agent-capabilities` records are accumulated and deduplicated while
+preserving first-seen order. This lets publishers split capabilities across
+multiple TXT records without losing earlier values.
+
 Example HeadlessProfile bridge records:
 
 ```text
 agent-manifest:https://example.test/agent.json
 skill-md:https://example.test/SKILL.md
 agent-capabilities:lookup,describe
+agent-capabilities:search,lookup
 arp:https://chat.example.test
 ```
 
@@ -73,7 +78,8 @@ These records resolve to normalized metadata equivalent to:
   "skill": "https://example.test/SKILL.md",
   "capabilities": [
     {"id": "lookup", "name": "lookup"},
-    {"id": "describe", "name": "describe"}
+    {"id": "describe", "name": "describe"},
+    {"id": "search", "name": "search"}
   ],
   "protocols": [
     {"id": "arp", "name": "arp"}
@@ -88,6 +94,17 @@ merge it with HeadlessProfile bridge records.
 Malformed or unsupported versioned records also prevent bridge fallback. This
 keeps broken primary metadata visible instead of letting valid HeadlessProfile
 records hide the error.
+
+Unrelated TXT records are ignored for bridge fallback, including unrelated
+records that exceed agent metadata limits. When bridge fallback succeeds,
+HeadlessProfile records used by the bridge are removed from the `ignored`
+diagnostics, while unrelated TXT records remain ignored.
+
+If any HeadlessProfile bridge record is malformed, the resolver continues
+scanning the full TXT set before returning `malformed_records`. This keeps
+diagnostics stable when DNS TXT order varies: every HeadlessProfile bridge record
+is included in the malformed diagnostic, and bridge records are removed from
+`ignored` while unrelated TXT records remain there.
 
 ## Fields
 
