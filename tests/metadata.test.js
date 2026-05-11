@@ -156,6 +156,22 @@ test('parses HeadlessProfile aliases and equals delimiters', () => {
   assert.equal(result.identity.protocols[0].id, 'arp');
 });
 
+test('rejects empty HeadlessProfile bridge values', () => {
+  const result = parseTxtRecords([
+    ['v=spf1 -all'],
+    ['agent-manifest:'],
+    ['agent-capabilities:search']
+  ]);
+
+  assert.equal(result.status, 'malformed_records');
+  assert.equal(result.identity, null);
+  assert.equal(result.record, null);
+  assert.equal(result.malformed.length, 1);
+  assert.equal(result.malformed[0].record, 'agent-manifest:\nagent-capabilities:search');
+  assert.match(result.malformed[0].message, /HeadlessProfile TXT value is empty/);
+  assert.deepEqual(result.ignored, ['v=spf1 -all']);
+});
+
 test('does not report bridged records as ignored when bridge succeeds', () => {
   const result = parseTxtRecords([
     ['v=spf1 -all'],
