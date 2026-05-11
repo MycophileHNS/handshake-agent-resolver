@@ -86,6 +86,12 @@ function getHeadlessProfileKey(value) {
   return HEADLESS_PROFILE_FIELDS.has(key) ? key : null;
 }
 
+function getDelimitedValue(value) {
+  const index = firstDelimiterIndex(value);
+  if (index === -1) return null;
+  return value.slice(index + 1).trim();
+}
+
 function splitCommaListValue(value) {
   if (Array.isArray(value)) return value;
   if (typeof value !== 'string') return [];
@@ -150,6 +156,11 @@ function parseHeadlessProfileRecords(values) {
 
     if (value.length > MAX_TXT_VALUE_LENGTH) {
       malformedMessage = malformedMessage ?? 'HeadlessProfile TXT value is too long';
+      continue;
+    }
+
+    if (!getDelimitedValue(value)) {
+      malformedMessage = malformedMessage ?? 'HeadlessProfile TXT value is empty';
       continue;
     }
 
